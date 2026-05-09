@@ -1,0 +1,58 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: go test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Go env
+        run: go env
+
+      - name: Unit + integration tests (netfs)
+        run: go test ./...
+
+      - name: Regression tests (go9p)
+        run: |
+          # Keep this to library-level packages so we don't pull in kernel/OS-specific
+          # test binaries (e.g. cmd/kernel9p-*) from the go9p repo.
+          go test github.com/lionkov/go9p/p/...
+          go test github.com/lionkov/go9p/p/srv/...
+
+  kernel9p-netfs-qemu:
+    name: kernel9p netfs e2e (qemu, arm64)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run kernel9p netfs e2e in v9fs/docker
+        run: |
+          docker run --rm --privileged --platform linux/arm64 \
+            -v "${{ github.workspace }}:/opt/v9fs/go9p-netfs" \
+            -w /opt/v9fs/go9p-netfs \
+            -e V9FS_TEST_KERNEL_TAG="kernel-main" \
+            ghcr.io/v9fs/docker:v2.0.0 \
+            bash /opt/v9fs/go9p-netfs/scripts/v9fs/ci-e2e-netfs.sh
+

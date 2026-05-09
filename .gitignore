@@ -1,0 +1,4 @@
+/go9p-netfs
+*.test
+*.out
+.DS_Store
